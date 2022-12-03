@@ -8,19 +8,6 @@ parse = map (words) . lines
 solve :: [[String]] -> String
 solve xs = show $ sum $ map score2 xs
 
-
-{- Score round: ["A" "X"] =>
-A X 4
-A Y 8
-A Z 3
-B X 1
-B Y 5
-B Z 9
-C X 7
-C Y 2
-C Z 6
--}
-
 score :: [String] -> Int
 score (they:me:_) = myScore + winScore
   where myScore = case me of
