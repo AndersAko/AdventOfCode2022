@@ -1,7 +1,9 @@
 import Data.List
 import Data.Char
 
-main = readFile "input.txt" >>= print . solve2 . parse
+main = do 
+    readFile "input.txt" >>= print . solve1 . parse
+    readFile "input.txt" >>= print . solve2 . parse
 
 parse :: String -> [String]
 parse = lines
@@ -33,6 +35,7 @@ solve2 xs = show $ sum $ badges [] xs
 badges :: [Int] -> [String] -> [Int]
 badges bs [] = bs
 badges bs rucks = 
-    let badge = head [x | x <- [x | x <- head rucks, elem x (rucks !! 1)], elem x (rucks !! 2)]
+    let badge = head $ intersect (head rucks) $ intersect (rucks !! 1) (rucks !! 2) 
+    -- let badge = head [x | x <- [x | x <- head rucks, elem x (rucks !! 1)], elem x (rucks !! 2)]
     in badges ((priority badge) : bs) (drop 3 rucks) 
         
