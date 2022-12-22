@@ -23,34 +23,6 @@ solve1 input =
         (_,totalSum) = foldl sumSides ([], 0) input 
     in "Part1: " ++ show totalSum
 
--- Solve 2  attempt 1: Surface area = length of airCubes, except the ones which are 6    
---          attempt 2: Expand all bubbles, remove any bubbles from airCubes list
-solve2_1:: [[Int]] -> String
-solve2_1 input = 
-    let airCubes = filter (not . flip elem input) $ foldl (\acc cube -> acc ++ (neighbours cube)) [] input
-        -- go through the list of airCubes, expand to all neighbours, not in input. Returns all cubes in bubble
-        expandBubble :: [[Int]] -> [[Int]] -> [[Int]]
-        expandBubble [] _ = []
-        expandBubble (cube:cubes) blockedCubes = 
-            let expandTo = filter (not . flip elem blockedCubes) (neighbours cube)
-            in --trace ("expand: " ++ show (cube:cubes) ++ "\n" ) $ 
-                cube:(expandBubble (cubes ++ expandTo) (expandTo ++ blockedCubes))
-
-        searchDepth = 1000
-        findBubbles [] = []
-        findBubbles (cube:cubes) = 
-            let bubble = take searchDepth $ expandBubble [cube] (cube:input) 
-                remaining = filter (not . flip elem bubble) cubes 
-            in  if length bubble < searchDepth then 
-                    trace ("Found a bubble: " ++ (show bubble) ++ "\n" )
-                    bubble ++ (findBubbles remaining) 
-                else findBubbles remaining
-        airBubbles = findBubbles uniqueAirCubes
-        uniqueAirCubes = map head $ group $ sort airCubes 
-        externalSides =  sum $ map length $ group $ sort $ filter (not . flip elem airBubbles) airCubes 
-    in "Unique air cubes: " ++ (show uniqueAirCubes) ++ "\n" ++ "Bubbles: " ++ (show airBubbles) ++ "\n" ++
-        "External sides: " ++ show externalSides ++ "\n" ++ (show $ map length $ group $ sort $ filter (not . flip elem airBubbles) airCubes)
-
 -- Solve 2 attempt 3 - expand outside lava droplet, count all cubes found
 solve2 :: [[Int]] -> String
 solve2 input = 
