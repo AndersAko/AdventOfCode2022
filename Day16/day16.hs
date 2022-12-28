@@ -1,8 +1,11 @@
+{-# LANGUAGE MultiWayIf #-}
 import Data.Char 
 import qualified Data.Set as Set 
 import Data.Set (Set) 
 import qualified Data.Map as Map
 import Data.Map.Strict (Map, (!?))
+import Data.IntMap (IntMap)
+import qualified Data.IntMap.Strict as IntMap
 import Data.Sequence (Seq(..), (<|), (|>), (><))
 import Data.Sequence (Seq (Empty, (:<|), (:|>)))
 import qualified Data.Sequence as Seq
@@ -29,10 +32,6 @@ splitOn c s = (takeWhile (/= c) s):splitOn c (dropWhile (/= c) s)
 
 readInt :: String -> Int
 readInt = read . filter isNumber 
-
--- map input to dict: "XX": flow, [tunnels]
--- possibleMoves = open, move
--- state = position, [open valves], flow = + Sum(open flow)
 
 ----- Domain common
 type Domain = [Room]
@@ -120,7 +119,7 @@ possibleMoves2 rooms state@(State rooms' minute' openValves' accFlow' _) =
 
 
 --- Solver using A* search
-type Queue = Seq State
+type Queue = IntMap [State]
 type Visited = Map ([String],[String]) State
 solve:: (State -> [State]) -> State -> (State -> Bool) -> State
 solve possibleMoves initialState isEndState = 
@@ -130,20 +129,10 @@ solve possibleMoves initialState isEndState =
             | isWorse s visited         = -- trace ("Rejecting insert of item " ++ show s)
                                             queue
             | otherwise                 = 
-                let (before,after) = Seq.spanl ((>newStateMaxFlow) . maxFlow) queue
-                in (before |> s) <>after
-
-        -- insertInQueue' :: Queue -> State -> Queue
-        -- insertInQueue' [] s = [s]
-        -- insertInQueue' queue@(q:qs) s  
-        --     | (maxFlow s) > (maxFlow q) = s:(filterQueue queue s)
-        --     | otherwise                 = q:(insertInQueue' qs s)
-
-        -- filterQueue :: Queue -> State -> Queue
-        -- filterQueue [] _ = []
-        -- filterQueue queue@(q:qs) s
-        --     | key s == key q    = trace ("Dropping queue item " ++ show q ++ " on key: " ++ show (key q)) filterQueue qs s           -- All remaining states in queue with same room and valves will be worse, remove them
-        --     | otherwise         = q:(filterQueue qs s)
+                let sameScoreStates = case IntMap.lookup newStateMaxFlow queue of
+                                        Just sameScore  -> (s:sameScore)
+                                        Nothing         -> [s]
+                in IntMap.insert newStateMaxFlow sameScoreStates queue 
 
         -- Is the new state equal or worse than previously visited ?
         key state = (sort $ room state, sort $ openValves state)
@@ -154,19 +143,22 @@ solve possibleMoves initialState isEndState =
                 Just best -> maxFlow state <= maxFlow best 
 
         processQueue :: Queue -> Visited -> Int -> State
-        processQueue (state:<|qs) visited counter
-            | isEndState state              = state
-            | isWorse state visited         = -- trace ("Discarding " ++ show state) $ 
-                                                processQueue qs visited (counter+1)
-            | otherwise                     =
-                let newMoves = possibleMoves state
-                    newQueue = foldl (insertInQueue visited) qs newMoves
-                    processNext = processQueue newQueue (Map.insert (key state) state visited) (counter+1)
-                in  if counter `mod` 100 == 0 then 
-                    trace (show (length qs) ++ " " ++ show (maxFlow state) ++ " newMoves from state: " ++ show state ++ " => " ++ show newMoves) processNext
-                    else processNext
-        processQueue Seq.Empty _ counter= trace ("No path possible, queue empty. " ++ show counter ++ " iterations") State ["Error"] 0 [] 0 0 
-    in processQueue (Seq.singleton initialState) Map.empty 0
+        processQueue queue visited counter =
+            let (score, highestScoreStates) = fromJust (IntMap.lookupMax queue)
+                state = head highestScoreStates
+                qs = if length highestScoreStates == 1 then IntMap.delete score queue else IntMap.insert score (tail highestScoreStates) queue
+                newMoves = possibleMoves state
+                newQueue = foldl (insertInQueue visited) qs newMoves
+                processNext = if 
+                    | isEndState state              -> state
+                    | isWorse state visited         -> -- trace ("Discarding " ++ show state) $ 
+                                                        processQueue qs visited (counter+1)
+                    | otherwise                     -> processQueue newQueue (Map.insert (key state) state visited) (counter+1)
+            in  if counter `mod` 5000 == 0 then 
+                trace (show (length qs) ++ " " ++ show (maxFlow state) ++ " newMoves from state: " ++ show state ++ " => " ++ show newMoves) processNext
+                else processNext
+        --processQueue Map.Empty _ counter= trace ("No path possible, queue empty. " ++ show counter ++ " iterations") State ["Error"] 0 [] 0 0 
+    in processQueue (IntMap.singleton 0 [initialState]) Map.empty 0
 
 
 -- Solve part 1
