@@ -4,13 +4,14 @@ import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map.Strict (Map, (!?))
 import Data.Sequence (Seq(..), (<|), (|>), (><))
+import Data.Sequence (Seq (Empty, (:<|), (:|>)))
 import qualified Data.Sequence as Seq
 import Data.List
 import Data.Maybe
 import Debug.Trace
 
 main = do 
-    input <- readFile "input0.txt"
+    input <- readFile "input.txt"
     putStrLn (solve1 $ parse $ lines input)
     putStrLn (solve2 $ parse $ lines input)
 
@@ -37,17 +38,14 @@ readInt = read . filter isNumber
 type Domain = [Room]
 data Room  = Room { name:: String, flow :: Int, tunnelsTo :: [String]  } deriving (Show)
 data State = State { room:: [String], minute:: Int, openValves :: [String], accFlow :: Int, maxFlow :: Int } deriving (Show, Eq, Ord)
-maxMinutes = 26
 
 flowFromOpenValves :: Domain -> [String] -> Int
 flowFromOpenValves rooms openValves = sum $ map (flow) $ filter (flip elem openValves . name) rooms
 
-
-
 -- Part 1 Domain
 initialState1 = State { room = ["AA"], minute = 0, openValves = [], accFlow = 0, maxFlow = 0 } -- maxFlow doesn't matter, since it will be the only entry in queue
 isEndState1 :: State -> Bool
-isEndState1 State { minute = minute } = minute >= maxMinutes
+isEndState1 State { minute = minute } = minute >= 30
 
 calcMaximumFlow1 :: Domain -> State -> Int
 calcMaximumFlow1 rooms state@(State room minute openValves accFlow _) =
@@ -57,8 +55,8 @@ calcMaximumFlow1 rooms state@(State room minute openValves accFlow _) =
         calcPossibleFlow 0 _ = 0
         calcPossibleFlow 1 _ = 0
         calcPossibleFlow minutes (x:xs) = x * (minutes - 1) + calcPossibleFlow (minutes-2) xs 
-        maxFlowFromUnopenedValves = calcPossibleFlow (maxMinutes-minute) $ reverse $ sort $ map (flow) $ filter (not . flip elem openValves . name) rooms
-    in accFlow + flowFromOpenValves'*(maxMinutes - minute) + maxFlowFromUnopenedValves
+        maxFlowFromUnopenedValves = calcPossibleFlow (30-minute) $ reverse $ sort $ map (flow) $ filter (not . flip elem openValves . name) rooms
+    in accFlow + flowFromOpenValves'*(30 - minute) + maxFlowFromUnopenedValves
 
 possibleMoves1 :: Domain -> State -> [State]
 possibleMoves1 rooms state@(State (room':_) minute' openValves' accFlow' _) = 
@@ -90,8 +88,8 @@ calcMaximumFlow2 rooms state@(State room minute openValves accFlow _) =
         calcPossibleFlow 1 _ = 0
         calcPossibleFlow minutes (x1:x2:xs) = (x1+x2) * (minutes - 1) + calcPossibleFlow (minutes-2) xs 
         calcPossibleFlow minutes (x:xs) = x * (minutes - 1) + calcPossibleFlow (minutes-2) xs 
-        maxFlowFromUnopenedValves = calcPossibleFlow (maxMinutes-minute) $ reverse $ sort $ map (flow) $ filter (not . flip elem openValves . name) rooms
-    in accFlow + flowFromOpenValves'*(maxMinutes - minute) + maxFlowFromUnopenedValves
+        maxFlowFromUnopenedValves = calcPossibleFlow (26-minute) $ reverse $ sort $ map (flow) $ filter (not . flip elem openValves . name) rooms
+    in accFlow + flowFromOpenValves'*(26 - minute) + maxFlowFromUnopenedValves
 
 data Move = Move String | Open String | Noop deriving (Show, Eq)
 possibleMoves2 :: Domain -> State -> [State]
@@ -122,29 +120,30 @@ possibleMoves2 rooms state@(State rooms' minute' openValves' accFlow' _) =
 
 
 --- Solver using A* search
-type Queue = [State]
+type Queue = Seq State
 type Visited = Map ([String],[String]) State
 solve:: (State -> [State]) -> State -> (State -> Bool) -> State
 solve possibleMoves initialState isEndState = 
     let 
         insertInQueue :: Visited -> Queue -> State -> Queue
-        insertInQueue _ [] s = [s]
-        insertInQueue visited queue@(q:qs) s  
+        insertInQueue visited queue s@State{ maxFlow = newStateMaxFlow }  
             | isWorse s visited         = -- trace ("Rejecting insert of item " ++ show s)
                                             queue
-            | otherwise                 = insertInQueue' queue s
+            | otherwise                 = 
+                let (before,after) = Seq.spanl ((>newStateMaxFlow) . maxFlow) queue
+                in (before |> s) <>after
 
-        insertInQueue' :: Queue -> State -> Queue
-        insertInQueue' [] s = [s]
-        insertInQueue' queue@(q:qs) s  
-            | (maxFlow s) > (maxFlow q) = s:(filterQueue queue s)
-            | otherwise                 = q:(insertInQueue' qs s)
+        -- insertInQueue' :: Queue -> State -> Queue
+        -- insertInQueue' [] s = [s]
+        -- insertInQueue' queue@(q:qs) s  
+        --     | (maxFlow s) > (maxFlow q) = s:(filterQueue queue s)
+        --     | otherwise                 = q:(insertInQueue' qs s)
 
-        filterQueue :: Queue -> State -> Queue
-        filterQueue [] _ = []
-        filterQueue queue@(q:qs) s
-            | key s == key q    = trace ("Dropping queue item " ++ show q ++ " on key: " ++ show (key q)) filterQueue qs s           -- All remaining states in queue with same room and valves will be worse, remove them
-            | otherwise         = q:(filterQueue qs s)
+        -- filterQueue :: Queue -> State -> Queue
+        -- filterQueue [] _ = []
+        -- filterQueue queue@(q:qs) s
+        --     | key s == key q    = trace ("Dropping queue item " ++ show q ++ " on key: " ++ show (key q)) filterQueue qs s           -- All remaining states in queue with same room and valves will be worse, remove them
+        --     | otherwise         = q:(filterQueue qs s)
 
         -- Is the new state equal or worse than previously visited ?
         key state = (sort $ room state, sort $ openValves state)
@@ -154,18 +153,20 @@ solve possibleMoves initialState isEndState =
                 Nothing -> False
                 Just best -> maxFlow state <= maxFlow best 
 
-        processQueue :: Queue -> Visited -> State
-        processQueue (state:qs) visited 
+        processQueue :: Queue -> Visited -> Int -> State
+        processQueue (state:<|qs) visited counter
             | isEndState state              = state
-            | isWorse state visited         = --trace ("Discarding " ++ show state) $ 
-                                                processQueue qs visited
+            | isWorse state visited         = -- trace ("Discarding " ++ show state) $ 
+                                                processQueue qs visited (counter+1)
             | otherwise                     =
                 let newMoves = possibleMoves state
                     newQueue = foldl (insertInQueue visited) qs newMoves
-                in  trace (show (length qs) ++ " " ++ show (maxFlow state)) -- " newMoves from state: " ++ show state ++ " => " ++ show newMoves)
-                processQueue newQueue (Map.insert (key state) state visited)
-        processQueue [] _ = trace ("No path possible, queue empty ") State ["Error"] 0 [] 0 0 
-    in processQueue [initialState] Map.empty
+                    processNext = processQueue newQueue (Map.insert (key state) state visited) (counter+1)
+                in  if counter `mod` 100 == 0 then 
+                    trace (show (length qs) ++ " " ++ show (maxFlow state) ++ " newMoves from state: " ++ show state ++ " => " ++ show newMoves) processNext
+                    else processNext
+        processQueue Seq.Empty _ counter= trace ("No path possible, queue empty. " ++ show counter ++ " iterations") State ["Error"] 0 [] 0 0 
+    in processQueue (Seq.singleton initialState) Map.empty 0
 
 
 -- Solve part 1
