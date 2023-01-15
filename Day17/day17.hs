@@ -1,13 +1,11 @@
 {-# LANGUAGE MultiWayIf #-}
-import Data.Char 
+import Data.Char () 
 import Data.List
 import qualified Data.Set as Set 
 import Data.Set (Set) 
-import qualified Data.Map as Map 
-import Data.Map (Map) 
-import Data.Maybe
+-- import qualified Data.Map as Map 
+-- import Data.Map (Map) 
 import Debug.Trace
--- import qualified Data.Text as T
 
 main = do 
     input <- readFile "input.txt"
@@ -95,8 +93,8 @@ solve2 jets =
         trillion = 1000000000000 - (snd (head heights)) -- 1000000000000
         heightRest = (getHeight $ falling !! ((snd $ head heights) + trillion `rem` repeatBlocks)) - fst (head heights)
         height1000000000000 = (fst $ head heights) + (trillion `div` repeatBlocks) * heightRepeat + heightRest
-    in  trace (show (take 40 heights)  ++ "\n" ++ show (take 40 $ difference heights) ++ "\n" ++
-                "repeatBlocks: " ++ show repeatBlocks ++ " heightRepeat: " ++ show heightRepeat ++ " heightRest: " ++ show heightRest)
+    in  --trace (show (take 40 heights)  ++ "\n" ++ show (take 40 $ difference heights) ++ "\n" ++
+        --        "repeatBlocks: " ++ show repeatBlocks ++ " heightRepeat: " ++ show heightRepeat ++ " heightRest: " ++ show heightRest)
         "Part 2: height = " ++ show height1000000000000
 
     
